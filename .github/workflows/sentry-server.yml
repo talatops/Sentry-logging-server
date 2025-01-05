@@ -1,41 +1,61 @@
-name: Deploy to DigitalOcean
+name: build-deploy-sentry-logging
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+  push:
+    branches: main
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      - name: Log in to DO Container Registry
-        run: doctl registry login --expiry-seconds 600
-
-      - name: Build container image
-        run: docker build -t registry.digitalocean.com/${{ secrets.REGISTRY_NAME }}/eliza-logging:$(echo $GITHUB_SHA | head -c7) .
-
-      - name: Push image to DO Container Registry
-        run: docker push registry.digitalocean.com/${{ secrets.REGISTRY_NAME }}/eliza-logging:$(echo $GITHUB_SHA | head -c7)
-
-      - name: Update deployment file
+      - name: Set up environment variables
         run: |
-          TAG=$(echo $GITHUB_SHA | head -c7)
-          sed -i 's|<IMAGE>|registry.digitalocean.com/${{ secrets.REGISTRY_NAME }}/eliza-logging:'${TAG}'|' $GITHUB_WORKSPACE/config/deployment.yml
+          echo -e "${{ secrets.ENV_DEV }}" >> .env
+          echo "IMAGE_NAME=sentry-logging" >> .env
+          echo "CONTAINER_NAME=sentrylogging" >> .env
 
-      - name: Save DigitalOcean kubeconfig
-        run: doctl kubernetes cluster kubeconfig save ${{ secrets.CLUSTER_NAME }}
+      - name: Build Docker image with Docker Compose
+        run: |
+          docker compose build --no-cache
 
-      - name: Deploy to DigitalOcean Kubernetes
-        run: kubectl apply -f $GITHUB_WORKSPACE/config/deployment.yml
+      - name: Save Docker image
+        run: |
+          docker save -o sentry-logging.tar sentry-logging
 
-      - name: Verify deployment
-        run: kubectl rollout status deployment/eliza-logging 
+      - name: Copy image to Droplet
+        run: |
+          # Set up the SSH key
+          echo "${{ secrets.SSH_KEY_DEV }}" >> ssh-key.pem
+          sudo chmod 400 ssh-key.pem
+
+          # Create a target directory on the remote host
+          ssh -i ssh-key.pem -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} 'mkdir -p /sentry-logging'
+
+          # Copy Docker image, and Docker Compose file to the remote server
+          scp -i ssh-key.pem -o StrictHostKeyChecking=no .env root@${{ secrets.REMOTE_HOST_DEV }}:/sentry-logging/.env
+          scp -i ssh-key.pem -o StrictHostKeyChecking=no sentry-logging.tar root@${{ secrets.REMOTE_HOST_DEV }}:/sentry-logging/sentry-logging.tar
+          scp -i ssh-key.pem -o StrictHostKeyChecking=no docker-compose.yml root@${{ secrets.REMOTE_HOST_DEV }}:/sentry-logging/docker-compose.yml
+
+      - name: Run Docker container with Docker Compose
+        run: |
+          ssh -i ssh-key.pem -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} << 'EOF'
+            cd /sentry-logging
+
+            docker ps -q --filter ancestor=agent-builder-dev:latest | xargs -r docker stop
+            docker ps -aq --filter ancestor=agent-builder-dev:latest | xargs -r docker rm
+
+            docker rmi sentry-logging:latest || true
+
+            docker load -i sentry-logging.tar
+            docker compose down
+            docker compose up -d
+
+      - name: Cleanup
+        run: |
+          rm -f ssh-key.pem .env sentry-logging.tar
+          docker rmi sentry-logging:latest || true
