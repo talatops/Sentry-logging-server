@@ -1,4 +1,4 @@
-name: build-deploy-sentry-logging
+name: build-deploy-eliza-logging
 
 on:
   workflow_dispatch:
@@ -16,8 +16,8 @@ jobs:
       - name: Set up environment variables
         run: |
           echo -e "${{ secrets.ENV_DEV }}" >> .env
-          echo "IMAGE_NAME=sentry-logging" >> .env
-          echo "CONTAINER_NAME=sentrylogging" >> .env
+          echo "IMAGE_NAME=eliza-logging" >> .env
+          echo "CONTAINER_NAME=elizalogging" >> .env
 
       - name: Build Docker image with Docker Compose
         run: |
@@ -25,7 +25,7 @@ jobs:
 
       - name: Save Docker image
         run: |
-          docker save -o sentry-logging.tar sentry-logging
+          docker save -o eliza-logging.tar eliza-logging
 
       - name: Copy image to Droplet
         run: |
@@ -34,28 +34,28 @@ jobs:
           sudo chmod 400 ssh-key.pem
 
           # Create a target directory on the remote host
-          ssh -i ssh-key.pem -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} 'mkdir -p /sentry-logging'
+          ssh -i ssh-key.pem -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} 'mkdir -p /eliza-logging'
 
           # Copy Docker image, and Docker Compose file to the remote server
-          scp -i ssh-key.pem -o StrictHostKeyChecking=no .env root@${{ secrets.REMOTE_HOST_DEV }}:/sentry-logging/.env
-          scp -i ssh-key.pem -o StrictHostKeyChecking=no sentry-logging.tar root@${{ secrets.REMOTE_HOST_DEV }}:/sentry-logging/sentry-logging.tar
-          scp -i ssh-key.pem -o StrictHostKeyChecking=no docker-compose.yml root@${{ secrets.REMOTE_HOST_DEV }}:/sentry-logging/docker-compose.yml
+          scp -i ssh-key.pem -o StrictHostKeyChecking=no .env root@${{ secrets.REMOTE_HOST_DEV }}:/eliza-logging/.env
+          scp -i ssh-key.pem -o StrictHostKeyChecking=no eliza-logging.tar root@${{ secrets.REMOTE_HOST_DEV }}:/eliza-logging/eliza-logging.tar
+          scp -i ssh-key.pem -o StrictHostKeyChecking=no docker-compose.yml root@${{ secrets.REMOTE_HOST_DEV }}:/eliza-logging/docker-compose.yml
 
       - name: Run Docker container with Docker Compose
         run: |
           ssh -i ssh-key.pem -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} << 'EOF'
-            cd /sentry-logging
+            cd /eliza-logging
 
-            docker ps -q --filter ancestor=agent-builder-dev:latest | xargs -r docker stop
-            docker ps -aq --filter ancestor=agent-builder-dev:latest | xargs -r docker rm
+            docker ps -q --filter ancestor=eliza-logging:latest | xargs -r docker stop
+            docker ps -aq --filter ancestor=eliza-logging:latest | xargs -r docker rm
 
-            docker rmi sentry-logging:latest || true
+            docker rmi eliza-logging:latest || true
 
-            docker load -i sentry-logging.tar
+            docker load -i eliza-logging.tar
             docker compose down
             docker compose up -d
 
       - name: Cleanup
         run: |
-          rm -f ssh-key.pem .env sentry-logging.tar
-          docker rmi sentry-logging:latest || true
+          rm -f ssh-key.pem .env eliza-logging.tar
+          docker rmi eliza-logging:latest || true
