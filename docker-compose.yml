@@ -1,10 +1,9 @@
-version: '3.8'
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: eliza-logging-app
     restart: unless-stopped
     ports:
