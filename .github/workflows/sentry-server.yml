@@ -23,7 +23,7 @@ jobs:
       - name: Copy project files
         run: |
           # Create project directory on Droplet
-          ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} 'mkdir -p /root/eliza'
+          ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_KEY }} 'mkdir -p /root/eliza'
           
           # Copy project files
           scp -i ssh_key -o StrictHostKeyChecking=no -r \
@@ -33,11 +33,11 @@ jobs:
             .env \
             docker-compose.yml \
             Dockerfile \
-            root@${{ secrets.REMOTE_HOST_DEV }}:/root/eliza/
+            root@${{ secrets.REMOTE_HOST_KEY }}:/root/eliza/
 
       - name: Deploy with Docker Compose
         run: |
-          ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} '
+          ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_KEY }} '
             cd /root/eliza
             docker compose down
             docker compose build --no-cache
