@@ -1,26 +1,34 @@
-name: Build and Test
+name: Deploy to Droplet
 
 on:
   push:
     branches: main
-  pull_request:
-    branches: main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_DEV }}" > .env
 
-      - name: Install dependencies
-        run: npm install
+      - name: Set up SSH
+        run: |
+          echo "${{ secrets.SSH_KEY_DEV }}" > ssh_key
+          chmod 600 ssh_key
 
-      - name: Build Docker image
-        run: docker build -t eliza-logging .
+      - name: Copy files to Droplet
+        run: |
+          scp -i ssh_key -o StrictHostKeyChecking=no .env docker-compose.yml Dockerfile root@${{ secrets.REMOTE_HOST_DEV }}:/root/eliza/
+
+      - name: Deploy to Droplet
+        run: |
+          ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} '
+            cd /root/eliza
+            docker compose down
+            docker compose build --no-cache
+            docker compose up -d
+          '
