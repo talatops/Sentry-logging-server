@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Viewer - Eliza</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Log Viewer</h1>
+            <div class="flex items-center space-x-4">
+                <button id="refreshButton" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh
+                </button>
+                <div class="flex items-center">
+                    <label class="mr-2">Auto-refresh:</label>
+                    <select id="refreshInterval" class="border rounded-lg px-3 py-2">
+                        <option value="0">Off</option>
+                        <option value="5000">5 seconds</option>
+                        <option value="10000">10 seconds</option>
+                        <option value="30000">30 seconds</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white p-4 rounded-lg shadow mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Environment</label>
+                    <select id="envFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="">All</option>
+                        <option value="development">Development</option>
+                        <option value="production">Production</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Level</label>
+                    <select id="levelFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="">All</option>
+                        <option value="error">Error</option>
+                        <option value="warn">Warning</option>
+                        <option value="info">Info</option>
+                        <option value="debug">Debug</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Start Date</label>
+                    <input type="datetime-local" id="startDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">End Date</label>
+                    <input type="datetime-local" id="endDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="min-w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Environment</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTable" class="bg-white divide-y divide-gray-200">
+                    <!-- Logs will be inserted here -->
+                </tbody>
+            </table>
+            <div id="pagination" class="px-6 py-4 flex items-center justify-between border-t border-gray-200">
+                <div class="flex-1 flex justify-between items-center">
+                    <div>
+                        <p class="text-sm text-gray-700" id="paginationInfo">
+                            Showing <span id="startCount">0</span> to <span id="endCount">0</span> of <span id="totalCount">0</span> results
+                        </p>
+                    </div>
+                    <div>
+                        <button id="prevPage" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                            Previous
+                        </button>
+                        <button id="nextPage" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Detail Modal -->
+        <div id="logModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden">
+            <div class="relative top-20 mx-auto p-5 border w-3/4 shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium">Log Details</h3>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <pre id="logDetail" class="bg-gray-100 p-4 rounded-lg overflow-auto max-h-96"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        const pageSize = 20;
+        let autoRefreshInterval = null;
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLogs();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('refreshButton').addEventListener('click', loadLogs);
+            document.getElementById('refreshInterval').addEventListener('change', updateAutoRefresh);
+            document.getElementById('envFilter').addEventListener('change', () => {
+                currentPage = 0;
+                loadLogs();
+            });
+            document.getElementById('levelFilter').addEventListener('change', () => {
+                currentPage = 0;
+                loadLogs();
+            });
+            document.getElementById('startDate').addEventListener('change', () => {
+                currentPage = 0;
+                loadLogs();
+            });
+            document.getElementById('endDate').addEventListener('change', () => {
+                currentPage = 0;
+                loadLogs();
+            });
+            document.getElementById('prevPage').addEventListener('click', () => {
+                if (currentPage > 0) {
+                    currentPage--;
+                    loadLogs();
+                }
+            });
+            document.getElementById('nextPage').addEventListener('click', () => {
+                currentPage++;
+                loadLogs();
+            });
+        }
+
+        function updateAutoRefresh() {
+            const interval = parseInt(document.getElementById('refreshInterval').value);
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            if (interval > 0) {
+                autoRefreshInterval = setInterval(loadLogs, interval);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const environment = document.getElementById('envFilter').value;
+                const level = document.getElementById('levelFilter').value;
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+
+                const params = new URLSearchParams({
+                    skip: currentPage * pageSize,
+                    limit: pageSize
+                });
+
+                if (environment) params.append('environment', environment);
+                if (level) params.append('level', level);
+                if (startDate) params.append('startDate', new Date(startDate).toISOString());
+                if (endDate) params.append('endDate', new Date(endDate).toISOString());
+
+                const response = await fetch(`/api/logs?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('loggingToken') || 'your-secret-key'}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch logs');
+
+                const data = await response.json();
+                renderLogs(data.logs);
+                updatePagination(data.total);
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                alert('Failed to load logs. Please check your connection and try again.');
+            }
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logsTable');
+            tbody.innerHTML = '';
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${new Date(log.timestamp).toLocaleString()}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getLevelBadgeColor(log.level)}">
+                            ${log.level}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${log.environment}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        ${log.message}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button onclick='showLogDetail(${JSON.stringify(log)})' class="text-blue-600 hover:text-blue-900">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getLevelBadgeColor(level) {
+            const colors = {
+                error: 'bg-red-100 text-red-800',
+                warn: 'bg-yellow-100 text-yellow-800',
+                info: 'bg-blue-100 text-blue-800',
+                debug: 'bg-gray-100 text-gray-800'
+            };
+            return colors[level] || colors.info;
+        }
+
+        function updatePagination(total) {
+            const startCount = currentPage * pageSize + 1;
+            const endCount = Math.min((currentPage + 1) * pageSize, total);
+            
+            document.getElementById('startCount').textContent = total === 0 ? 0 : startCount;
+            document.getElementById('endCount').textContent = endCount;
+            document.getElementById('totalCount').textContent = total;
+            
+            document.getElementById('prevPage').disabled = currentPage === 0;
+            document.getElementById('nextPage').disabled = endCount >= total;
+        }
+
+        function showLogDetail(log) {
+            const modal = document.getElementById('logModal');
+            const detailElement = document.getElementById('logDetail');
+            detailElement.textContent = JSON.stringify(log, null, 2);
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('logModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html> 

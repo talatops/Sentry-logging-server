@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eliza-logging-app
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/logging-server
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - mongodb
+    networks:
+      - eliza-network
+
+  mongodb:
+    image: mongo:6
+    container_name: eliza-mongodb
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - eliza-network
+
+networks:
+  eliza-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local 
