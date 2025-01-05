@@ -20,11 +20,22 @@ jobs:
           echo "${{ secrets.SSH_KEY_DEV }}" > ssh_key
           chmod 600 ssh_key
 
-      - name: Copy files to Droplet
+      - name: Copy project files
         run: |
-          scp -i ssh_key -o StrictHostKeyChecking=no .env docker-compose.yml Dockerfile root@${{ secrets.REMOTE_HOST_DEV }}:/root/eliza/
+          # Create project directory on Droplet
+          ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} 'mkdir -p /root/eliza'
+          
+          # Copy project files
+          scp -i ssh_key -o StrictHostKeyChecking=no -r \
+            src/ \
+            public/ \
+            package.json \
+            .env \
+            docker-compose.yml \
+            Dockerfile \
+            root@${{ secrets.REMOTE_HOST_DEV }}:/root/eliza/
 
-      - name: Deploy to Droplet
+      - name: Deploy with Docker Compose
         run: |
           ssh -i ssh_key -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST_DEV }} '
             cd /root/eliza
@@ -32,3 +43,7 @@ jobs:
             docker compose build --no-cache
             docker compose up -d
           '
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ssh_key
