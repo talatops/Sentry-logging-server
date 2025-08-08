@@ -1,4 +1,4 @@
-name: Deploy to Droplet
+name: Deploy to Droplets
 
 on:
   push:
@@ -48,6 +48,7 @@ jobs:
         if: always()
 
         run: rm -f ssh_key
+
 
 
 
