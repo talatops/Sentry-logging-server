@@ -49,6 +49,29 @@ jobs:
 
         run: rm -f ssh_key
 
+      # --- Discord Notification Step ---
+      - name: Send Discord Notification on Failure
+        if: failure() # This ensures the step only runs if any previous step in this job failed
+        uses: Ilshidur/action-discord@master # Changed to Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL_ACTIONS }} # Pass the full webhook URL as an environment variable
+        with:
+          # The 'args' input is used to pass the message content to this action
+          args: |
+            🚨 **Deployment to EC2 Failed!** 🚨
+            **Repository:** `${{ github.repository }}`
+            **Workflow:** `${{ github.workflow }}`
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** `${{ github.sha }}`
+            **Triggered by:** `${{ github.actor }}`
+            **Run URL:** `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            Please investigate immediately! <@1015923238674640896>
+          # Ilshidur/action-discord@master does not directly support 'username' or 'avatar_url' as inputs.
+          # These would typically be configured directly in the Discord webhook settings,
+          # or by sending a JSON payload with these fields if using a custom script.
+          # For now, we'll remove them as they cause the 'Unexpected input(s)' warning.
+
+
 
 
 
