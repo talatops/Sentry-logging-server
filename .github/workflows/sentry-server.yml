@@ -2,7 +2,7 @@ name: Deploy to Droplet
 
 on:
   push:
-    branches: main
+    branches: master
 
 jobs:
   deploy:
@@ -70,6 +70,7 @@ jobs:
           # These would typically be configured directly in the Discord webhook settings,
           # or by sending a JSON payload with these fields if using a custom script.
           # For now, we'll remove them as they cause the 'Unexpected input(s)' warning.
+
 
 
 
